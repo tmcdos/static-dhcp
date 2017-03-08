@@ -5,3 +5,9 @@ It generates config files for ***DNSmasq*** and uses ***RouterOS*** API to manag
 Network devices (usually PCs) are separated into subnets by department and use triplets (hostname, MAC address, IP address) for identification and preventing duplicates. 
 Information is stored in MySQL database and only exported by your explicit desire.
 All unknown DHCP leases (not statically assigned) are shown on a separate screen.
+
+Screenshots
+===========
+![](https://github.com/tmcdos/static-dhcp/raw/master/screenshots/shot-1.png)
+![](https://github.com/tmcdos/static-dhcp/raw/master/screenshots/shot-2.png)
+![](https://github.com/tmcdos/static-dhcp/raw/master/screenshots/shot-3.png)
