@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta content="text/html; charset=UTF-8" http-equiv="Content-Type">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Easy administration of DHCP leases and hostnames in the corporate LAN">
+  <title>Simple web GUI for DNS and DHCP</title>
+
+  <link rel="stylesheet" href="../normalize.css" type="text/css" media="all" property="">
+  <link rel="stylesheet" href="styles.css" type="text/css" media="all" property="">
+  <link rel="shortcut icon" href="favicon.png" type="image/png" media="screen" property="">
+  <link rel="apple-touch-icon" sizes="57x57" href="apple-touch-icon.png" type="image/png" media="screen" property="">
+  <link rel="apple-touch-icon" sizes="72x72" href="apple-touch-icon-72x72.png" type="image/png" media="screen" property="">
+  <link rel="apple-touch-icon" sizes="114x114" href="apple-touch-icon-114x114.png" type="image/png" media="screen" property="">
+</head>
+<body>
+  <section id="app" class="hidden">
+
+		<input class="tabmenu" type="radio" name="menu" id="tab-A" value="1" v-model="menu_id" />
+		<input class="tabmenu" type="radio" name="menu" id="tab-B" value="2" v-model="menu_id" />
+		<input class="tabmenu" type="radio" name="menu" id="tab-C" value="3" v-model="menu_id" />
+		<input class="tabmenu" type="radio" name="menu" id="tab-D" value="4" v-model="menu_id" />
+		<input class="tabmenu" type="radio" name="menu" id="tab-E" value="5" v-model="menu_id" />
+		<input class="tabmenu" type="radio" name="menu" id="tab-F" value="6" v-model="menu_id" />
+
+		<label class="tab-link" for="tab-A" tabindex="0" onFocus="this.click();">Hosts</label>
+		<label class="tab-link" for="tab-B" tabindex="0" onFocus="this.click();">Subnets</label>
+		<label class="tab-link" for="tab-C" tabindex="0" onFocus="this.click();">Unknowns</label>
+		<label class="tab-link" for="tab-D" tabindex="0" onFocus="this.click();">Export</label>
+		<label class="tab-link" for="tab-E" tabindex="0" onFocus="this.click();">Options</label>
+		<label class="tab-link" for="tab-F" tabindex="0" onFocus="this.click();">Search</label>
+
+		<div class="tab">
+		  <!-- Subnets -->
+			<div class="cell">
+			  <span>
+  			  <input type="checkbox" id="net_sort" class="box-chk" v-model="toggle_sort">
+  			  <label class="net-sort" for="net_sort">Toggle sorting</label>
+  			</span>
+  			<div class="tbl">
+  			  <div v-for="subnet in sorted_net" class="subnet" v-bind:class="[cur_net.id == subnet.id ? 'cur-net' : 'subnet-link']" @click="cur_net = subnet; find_id = '';">{{ subnet | filterSubnet(toggle_sort) }}</div>
+  			</div>
+			</div>
+			<!-- Hosts -->
+			<div class="cell">
+			  <table class="items" cellpadding="3" id="tbl_host">
+			    <caption class="rule-title" v-show="listHost.length">Click on a table cell to edit</caption>
+			    <thead>
+			      <tr>
+			        <th>Action</th>
+			        <th @click="hostSort(1)">
+			          IP
+			          <img class="arrow" src="images/sorted_up.gif" width="11" height="6" v-if="host_sorting==-1" />
+			          <img class="arrow" src="images/sorted_down.gif" width="11" height="6" v-if="host_sorting==1" />
+			        </th>
+			        <th @click="hostSort(2)">
+			          MAC
+			          <img src="images/sorted_up.gif" width="11" height="6" v-if="host_sorting==-2" />
+			          <img src="images/sorted_down.gif" width="11" height="6" v-if="host_sorting==2" />
+			        </th>
+			        <th @click="hostSort(3)">
+			          Hostname
+			          <img src="images/sorted_up.gif" width="11" height="6" v-if="host_sorting==-3" />
+			          <img src="images/sorted_down.gif" width="11" height="6" v-if="host_sorting==3" />
+			        </th>
+			      </tr>
+			    </thead>
+			    <tbody v-if="listHost.length">
+			      <tr v-for="host in listHost">
+			        <td class="delete" @click="askHostDelete(host)">&#10060;</td>
+			        <td @click="startEdit(1,host)">
+			          <span v-if="!(is_editing==host && edit_part==1)" v-bind:class="[host.id == find_id ? 'host_mark' : '']">{{ subnet_ID }}<strong>{{ host.ip }}</strong></span>
+			          <label v-else>{{ subnet_ID }}<input v-focus type="text" class="edit" size="3" maxlength="3" v-bind:pattern="ip_reg.source" v-model="new_value" @keydown="endEdit(1,host,$event)" @blur="cancelEdit" /></label>
+			        </td>
+			        <td @click="startEdit(2,host)">
+			          <span v-if="!(is_editing==host && edit_part==2)" v-bind:class="[host.id == find_id ? 'host_mark' : '']">{{ host.mac.replace(/:/g,"-") }}</span>
+			          <label v-else><input v-focus type="text" class="edit" size="15" maxlength="17" v-bind:pattern="mac_reg.source" v-model="new_value" @keydown="endEdit(2,host,$event)" @blur="cancelEdit" /></label>
+			        </td>
+			        <td @click="startEdit(3,host)">
+			          <span v-if="!(is_editing==host && edit_part==3)" v-bind:class="[host.id == find_id ? 'host_mark' : '']">{{ host.hostname }}</span>
+			          <label v-else><input v-focus type="text" class="edit" size="25" maxlength="32" v-bind:pattern="name_reg.source" v-model="new_value" @keydown="endEdit(3,host,$event)" @blur="cancelEdit" /></label>
+			        </td>
+			      </tr>
+			    </tbody>
+			    <tbody v-else>
+			      <tr align="center">
+			        <td colspan="4" class="rule-title">There are no hosts defined</td>
+			      </tr>
+			    </tbody>
+			  </table>
+			</div>
+			<!-- Add new host (visible only if at least ONE subnet and less than 10 hosts -->
+			<div class="clear top-space tbl">
+			  <form name="new_host" v-on:submit.prevent="addHost" v-if="net_list.length != 0 && host_list.length < max_host">
+			    <fieldset>
+			      <legend>Add new host</legend>
+			      <div class="right">
+     			    <label for="host_ip" position="above"><span>{{ subnet_ID }}</span></label>
+  		        <input type="text" class="edit edit-focus" name="host_ip" size="3" maxlength="3" placeholder="125" v-bind:pattern="ip_reg.source" v-model="add_ip" required />
+  		      </div>
+  		      <div class="right">
+              <label for="host_mac" position="above">MAC-address:</label>
+   			      <input type="text" class="edit edit-focus" name="host_mac" size="19" maxlength="17" placeholder="DF-12-0E-14-A5-90" v-bind:pattern="mac_reg.source" v-model="add_mac" required />
+   			    </div>
+   			    <div class="right">
+              <label for="host_name">Hostname:</label>
+     			    <input type="text" class="edit edit-focus" name="host_name" size="25" maxlength="32" placeholder="printer-a3" v-bind:pattern="name_reg.source" v-model="add_hostname" required />
+     			  </div>
+   			    <div class="right top-space">
+   			      <button class="submit" id="add_host">&nbsp;ADD&nbsp;</button>
+   			      <input type="checkbox" class="hidden" id="help_chk">
+   			      <label class="help" for="help_chk" tabindex="0">Help</label>
+      			  <div class="rules">
+      			    <hr/>
+      			    <div class="rule-title center">Rules for PC hostnames</div>
+      			    <ol class="tight">
+      			      <li>Use the first name of the person</li>
+      			      <li>Use the last name, if there is a conflict</li>
+      			      <li>Use the first and last name with dash / underscore, if there is a conflict</li>
+      			      <li>Use the first and 2nd name with dash / underscore, if there is a conflict</li>
+      			      <li>Use the first name and department with dash / underscore, if there is a conflict</li>
+      			      <li>If the host has both wired &amp; wireless ports - use descriptive suffix (<strong>_lan</strong>, <strong>_wifi</strong>)</li>
+      			      <li>If the host has multiple IPs - use the same hostname with numeric suffixes</li>
+      			    </ol>
+      			    <div class="rule-title center top-space">Rules for equipment</div>
+      			    <ol class="tight">
+      			      <li>Use a descriptive word for the primary usage (e.g. printer, scanner, ...)</li>
+      			      <li>Use a dash to append additional information (e.g. location or paper size)</li>
+      			      <li>Append a numeric suffix, if needed (e.g. <strong>hp2200_4</strong>)</li>
+      			    </ol>
+      			  </div>
+   			    </div>
+  			  </fieldset>
+			  </form>
+			  <div class="rule-title" v-if="net_list.length == 0">You won't be able to add hosts until you define at least ONE subnet</div>
+			  <div class="rule-title" v-if="net_list.length != 0 && host_list.length >= max_host">Maximum number of hosts ({{ max_host }}) for this DEMO reached</div>
+			</div>
+		</div>
+
+		<div class="tab">
+		  <!-- List of subnets -->
+			<div class="cell">
+			  <table class="items" cellpadding="3" id="tbl_net">
+			    <caption class="rule-title" v-show="listNet.length">Click on a table cell to edit</caption>
+			    <thead>
+			      <tr>
+			        <th>Action</th>
+			        <th @click="netSort(1)">
+			          Subnet
+			          <img class="arrow" src="images/sorted_up.gif" width="11" height="6" v-if="subnet_sorting==-1" />
+			          <img class="arrow" src="images/sorted_down.gif" width="11" height="6" v-if="subnet_sorting==1" />
+			        </th>
+			        <th @click="netSort(2)">
+			          Title
+			          <img src="images/sorted_up.gif" width="11" height="6" v-if="subnet_sorting==-2" />
+			          <img src="images/sorted_down.gif" width="11" height="6" v-if="subnet_sorting==2" />
+			        </th>
+			      </tr>
+			    </thead>
+			    <tbody v-if="listNet.length">
+			      <tr v-for="subnet in listNet">
+			        <td class="delete" @click="askNetDelete(subnet)" v-if="empty_net(subnet.id)">&#10060;</td>
+			        <td v-else>&nbsp;</td>
+			        <td @click="startEdit(4,subnet)">
+			          <span v-if="!(is_editing==subnet && edit_part==4)">{{ subnet.ip_1 + "." + subnet.ip_2 + "." + subnet.ip_3 }}</span>
+			          <label v-else><input v-focus type="text" class="edit" size="10" maxlength="11" v-bind:pattern="net_reg.source" v-model="new_value" @keydown="endEdit(4,subnet,$event)" @blur="cancelEdit" /></label>
+			        </td>
+			        <td @click="startEdit(5,subnet)">
+			          <span v-if="!(is_editing==subnet && edit_part==5)">{{ subnet.title }}</span>
+			          <label v-else><input v-focus type="text" class="edit" size="25" maxlength="50" v-model="new_value" @keydown="endEdit(5,subnet,$event)" @blur="cancelEdit" /></label>
+			        </td>
+			      </tr>
+			    </tbody>
+			    <tbody v-else>
+			      <tr align="center">
+			        <td colspan="4" class="rule-title">There are no subnets defined</td>
+			      </tr>
+			    </tbody>
+			  </table>
+			</div>
+			<!-- Add new subnet (visible only if less than 10 subnets -->
+			<div class="clear top-space tbl">
+			  <form name="new_subnet" v-on:submit.prevent="addSubnet" v-if="net_list.length < max_net">
+			    <fieldset>
+			      <legend>Add new subnet</legend>
+			      <div class="right">
+     			    <label for="net_ip" position="above">First 3 octets of IPv4:</label>
+  		        <input type="text" class="edit edit-focus" name="net_ip" size="10" maxlength="11" placeholder="192.168.25" v-bind:pattern="net_reg.source" v-model="add_subnet" required />
+  		      </div>
+   			    <div class="right">
+              <label for="net_title">Title:</label>
+     			    <input type="text" class="edit edit-focus" name="net_title" size="25" maxlength="50" placeholder="Department" v-model="add_title" required />
+     			  </div>
+   			    <div class="right top-space">
+   			      <button class="submit" id="add_subnet">&nbsp;ADD&nbsp;</button>
+   			    </div>
+  			  </fieldset>
+			  </form>
+			  <div class="rule-title" v-if="net_list.length >= max_net">Maximum number of subnets ({{ max_net }}) for this DEMO reached</div>
+			</div>
+		</div>
+
+		<div class="tab">
+			<h3>Unknowns</h3>
+		</div>
+
+		<div class="tab">
+			<h3>Export</h3>
+		</div>
+
+		<div class="tab">
+			<h3>Options</h3>
+		</div>
+
+		<div class="tab">
+		  <!-- all hosts -->
+			<div class="cell">
+        <label for="host_find">Filter by hostname / MAC-address:</label>
+		    <input type="text" class="search edit-focus" name="host_find" size="25" maxlength="50" v-model="find_host" />
+			  <div>&nbsp;</div>
+			  <table class="items" cellpadding="3" id="tbl_find">
+			    <caption class="rule-title"><span class="blue-text">{{ listFind.length }}</span> host{{ listFind.length==1 ? '' : 's' }}; <span class="blue-text">{{ net_uniq_cnt }}</span> subnet{{ net_uniq_cnt==1 ? '' : 's'}}</caption>
+			    <thead>
+			      <tr>
+			        <th>Subnet</th>
+			        <th @click="findSort(1)">
+			          IP
+			          <img class="arrow" src="images/sorted_up.gif" width="11" height="6" v-if="find_sorting==-1" />
+			          <img class="arrow" src="images/sorted_down.gif" width="11" height="6" v-if="find_sorting==1" />
+			        </th>
+			        <th @click="findSort(2)">
+			          MAC
+			          <img class="arrow" src="images/sorted_up.gif" width="11" height="6" v-if="find_sorting==-2" />
+			          <img class="arrow" src="images/sorted_down.gif" width="11" height="6" v-if="find_sorting==2" />
+			        </th>
+			        <th @click="findSort(3)">
+			          Hostname
+			          <img src="images/sorted_up.gif" width="11" height="6" v-if="find_sorting==-3" />
+			          <img src="images/sorted_down.gif" width="11" height="6" v-if="find_sorting==3" />
+			        </th>
+			      </tr>
+			    </thead>
+			    <tbody v-if="listFind.length">
+			      <tr v-for="host in listFind">
+			        <td>{{ net_map[host.net].title }}</td>
+			        <td><a class="find_res" href="#" @click="clickHost(host)">{{ net_map[host.net].ip_1 + "." + net_map[host.net].ip_2 + "." + net_map[host.net].ip_3 + "." + host.ip }}</a></td>
+			        <td><a class="find_res" href="#" @click="clickHost(host)">{{ host.mac.replace(/:/g,"-") }}</a></td>
+			        <td><a class="find_res" href="#" @click="clickHost(host)">{{ host.hostname }}</a></td>
+			      </tr>
+			    </tbody>
+			    <tbody v-if="listFind.length==0 && host_list.length!=0">
+			      <tr align="center">
+			        <td colspan="4" class="rule-title">No host matches your filter</td>
+			      </tr>
+			    </tbody>
+			    <tbody v-if="listFind.length==0 && host_list.length==0">
+			      <tr align="center">
+			        <td colspan="4" class="rule-title">There are no hosts defined</td>
+			      </tr>
+			    </tbody>
+			  </table>
+			</div>
+		</div>
+
+    <div id="warning" class="msg" v-html="warn_text" v-if="warn_text != ''"></div>
+    <div id="notification" class="msg" v-html="info_text" v-if="info_text != ''"></div>
+	</section>
+
+	<div id="spinner" class="loading hidden">
+	  <div></div>
+	</div>
+
+  <script src="vue.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>
